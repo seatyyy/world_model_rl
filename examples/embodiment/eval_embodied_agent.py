@@ -29,15 +29,17 @@ mp.set_start_method("spawn", force=True)
 
 
 @hydra.main(
-    version_base="1.1", config_path="config", config_name="maniskill_ppo_openvlaoft"
+    version_base="1.1", config_path="config", config_name="opensora_libero_spatial_grpo_openvlaoft"
 )
 def main(cfg) -> None:
-    cfg.runner.only_eval = True
+    cfg.runner.only_eval = True  # 设置为评估模式
     cfg = validate_cfg(cfg)
     print(json.dumps(OmegaConf.to_container(cfg, resolve=True), indent=2))
 
     cluster = Cluster(cluster_cfg=cfg.cluster)
     component_placement = HybridComponentPlacement(cfg, cluster)
+
+    # --- Just need rollout worker and env worker. Actor worker not needed. 因为不做梯度计算、不更新权重。
 
     # Create rollout worker group
     rollout_placement = component_placement.get_strategy("rollout")
@@ -50,6 +52,7 @@ def main(cfg) -> None:
         cluster, name=cfg.env.group_name, placement_strategy=env_placement
     )
 
+    # EmbodiedEvalRunner 只跑评估循环：env 提供观测 → rollout 生成动作 → env 执行 → 记录 success_once 等指标 → 输出评测结果。没有 loss 计算、没有参数更新
     runner = EmbodiedEvalRunner(
         cfg=cfg,
         rollout=rollout_group,

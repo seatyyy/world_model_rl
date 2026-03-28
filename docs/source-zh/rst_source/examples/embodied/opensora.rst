@@ -210,7 +210,7 @@ RLinf-OpenSora-LIBERO-Spatial 的目录结构如下：
        model_path: "/path/to/model/Openvla-oft-SFT-libero-spatial-traj1/"    # SFT 模型路径
        model_type: "openvla_oft"                                             # 模型类型设置为 openvla_oft
        use_proprio: False                                                    # 是否使用本体感觉信息
-       num_images_in_input: 1                                                # 输入图像数量
+       num_images_in_input: 1                                                # 输入图像数量，因为世界模型只生成一个视角的图像（没有腕部相机），而真实仿真器可以同时提供多个相机视角。
        num_action_chunks: 8                                                  # 动作块数量
        unnorm_key: "libero_spatial_no_noops"                                 # 动作归一化键（与 SFT 一致）。RLinf-OpenVLAOFT-LIBERO-130-Base-Lora 使用 libero_130_no_noops_trajall；RLinf-OpenVLAOFT-LIBERO-90-Base-Lora 使用 libero_90_no_noops_trajall。
 
@@ -287,18 +287,20 @@ RLinf-OpenSora-LIBERO-Spatial 的目录结构如下：
   - ``train/actor/grad_norm``：梯度范数
   - ``train/actor/lr``：学习率
   - ``train/actor/policy_loss``：PPO/GRPO 的策略损失
-  - ``train/critic/value_loss``：价值函数损失
+  - ``train/critic/value_loss``：价值函数损失  (GRPO 中没有价值函数损失）
   - ``train/critic/value_clip_ratio``：PPO-style value function clipping 中触发裁剪的比例
   - ``train/critic/explained_variance``：衡量价值函数拟合程度，越接近 1 越好
   - ``train/entropy_loss``：策略熵
-  - ``train/loss``：总训练损失（actor_loss + critic_loss + entropy_loss regularization）
+  - ``train/loss``：总训练损失（actor_loss + critic_loss + entropy_loss regularization） （GRPO中critic_loss为0）
 
 - **Rollout 指标**：
 
-  - ``rollout/advantages_max``：优势函数最大值
+  - ``rollout/advantages_max``：优势函数最大值 
   - ``rollout/advantages_mean``：优势函数均值
   - ``rollout/advantages_min``：优势函数最小值
   - ``rollout/rewards``：一个 chunk 的奖励（参考 libero_env.py 的 L414）
+
+NOTE: advantage: ``A_i = (r_i - mean(r_1, ..., r_G)) / std(r_1, ..., r_G)``
 
 - **环境指标**：
 
@@ -338,8 +340,11 @@ LIBERO 部分结果
 对于每个 LIBERO 套件，我们评估所有 task_id 与 trial_id 的组合。Object 与 Spatial 套件共评估 500 个环境（10 个任务 × 50 个试次）。
 
 我们根据模型的训练配置设置评估超参：
-对于 SFT 训练（LoRA-base）模型，设置 `do_sample = False`。
+对于 SFT 训练（LoRA-base）模型，设置 `do_sample = False`。AKA `token = argmax(logits)`
 对于 RL 训练模型，设置 `do_sample = True`、`temperature = 1.6`，并启用 `rollout_epoch=2` 以获得最佳性能。
+.. code-block:: python
+   probs = softmax(logits / temperature)
+   token = sample(probs) # AKA `token = multinomial(probs)`
 
 .. note::
 

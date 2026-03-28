@@ -604,6 +604,7 @@ class LiberoEnv(gym.Env):
 
     def chunk_step(self, chunk_actions):
         # chunk_actions: [num_envs, chunk_step, action_dim]
+        # action_dim = 7 xyz 位置 + rpy 旋转 + 夹爪
         chunk_size = chunk_actions.shape[1]
         obs_list = []
         infos_list = []
@@ -613,7 +614,7 @@ class LiberoEnv(gym.Env):
         raw_chunk_terminations = []
         raw_chunk_truncations = []
         for i in range(chunk_size):
-            actions = chunk_actions[:, i]
+            actions = chunk_actions[:, i] # [num_envs, action_dim]
             extracted_obs, step_reward, terminations, truncations, infos = self.step(
                 actions, auto_reset=False
             )
