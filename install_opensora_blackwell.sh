@@ -61,6 +61,8 @@ else
     uv venv "$VENV_DIR" --python "$PYTHON_VERSION"
     source "$VENV_DIR/bin/activate"
 fi
+# uv sync installs project deps (including torch) from pyproject.toml.
+# We MUST override torch afterwards with the correct CUDA 12.8 build.
 UV_TORCH_BACKEND=auto uv sync --extra embodied --active --no-install-project
 
 # --- System deps ---
@@ -77,9 +79,19 @@ fi
 uv pip install -r "$SCRIPT_DIR/requirements/embodied/envs/common.txt"
 
 # --- Step 1: PyTorch 2.7.0 + CUDA 12.8 (Blackwell sm_120 support) ---
+# Force-reinstall to override whatever uv sync installed (likely 2.6.0+cu124).
 echo "[1/8] Installing PyTorch ${TORCH_VERSION} (cu128 for Blackwell)..."
 pip install torch==${TORCH_VERSION} torchvision torchaudio \
-    --index-url ${TORCH_INDEX_URL}
+    --index-url ${TORCH_INDEX_URL} --force-reinstall
+
+# Verify torch was actually installed with cu128
+INSTALLED_TORCH_FULL=$(python -c "import torch; print(torch.__version__)")
+echo "Installed torch: $INSTALLED_TORCH_FULL"
+if [[ "$INSTALLED_TORCH_FULL" != *"cu128"* ]]; then
+    echo "ERROR: Expected torch with cu128, got $INSTALLED_TORCH_FULL" >&2
+    echo "This Blackwell GPU requires CUDA 12.8. Check your network or pip cache." >&2
+    exit 1
+fi
 
 # --- Step 2: LIBERO + ManiSkill ---
 echo "[2/8] Installing LIBERO + ManiSkill..."
@@ -121,16 +133,15 @@ source "$VENV_DIR/bin/activate"
 python -c "from opensora.registry import MODELS; print('opensora import: OK')" || \
     { echo "ERROR: opensora package not importable after install"; exit 1; }
 
-# --- Step 4: Apex (build from source for Blackwell) ---
-echo "[4/8] Installing Apex..."
+# --- Step 4: Apex (optional — RLinf does not import apex; only opensora lists it) ---
+echo "[4/8] Installing Apex (optional, skipping on Blackwell)..."
 local_torch_mm=$(python -c "import torch; v=torch.__version__.split('+')[0].split('.'); print(f'{v[0]}.{v[1]}')")
 local_py_tag="cp$(python -c "import sys; print(f'{sys.version_info.major}{sys.version_info.minor}')")"
 apex_wheel="apex-0.1+torch${local_torch_mm}-${local_py_tag}-${local_py_tag}-linux_x86_64.whl"
 apex_url="${GITHUB_PREFIX}https://github.com/RLinf/apex/releases/download/25.09/${apex_wheel}"
 uv pip uninstall apex || true
 uv pip install "$apex_url" 2>/dev/null || \
-    (echo "Apex wheel not found for torch ${local_torch_mm}, building from source..."; \
-     APEX_CPP_EXT=1 APEX_CUDA_EXT=1 uv pip install git+${GITHUB_PREFIX}https://github.com/RLinf/apex.git --no-build-isolation)
+    echo "WARNING: Apex prebuilt wheel not available for torch ${local_torch_mm} on Blackwell. Skipping — RLinf does not require it."
 
 # --- Step 5: Flash Attention (likely needs source build for cu128) ---
 echo "[5/8] Installing Flash Attention..."

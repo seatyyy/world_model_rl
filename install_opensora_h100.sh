@@ -58,6 +58,8 @@ else
     uv venv "$VENV_DIR" --python "$PYTHON_VERSION"
     source "$VENV_DIR/bin/activate"
 fi
+# uv sync installs project deps (including torch) from pyproject.toml.
+# We MUST override torch afterwards with the correct version.
 UV_TORCH_BACKEND=auto uv sync --extra embodied --active --no-install-project
 
 # --- System deps ---
@@ -73,10 +75,14 @@ fi
 # --- Common embodied deps ---
 uv pip install -r "$SCRIPT_DIR/requirements/embodied/envs/common.txt"
 
-# --- Step 1: PyTorch (pin the correct version early) ---
+# --- Step 1: PyTorch (pin the correct version, override uv sync) ---
 echo "[1/8] Installing PyTorch ${TORCH_VERSION} (cu124)..."
 pip install torch==${TORCH_VERSION} torchvision==${TORCHVISION_VERSION} torchaudio==${TORCHAUDIO_VERSION} \
-    --index-url ${TORCH_INDEX_URL}
+    --index-url ${TORCH_INDEX_URL} --force-reinstall
+
+# Verify
+INSTALLED_TORCH_FULL=$(python -c "import torch; print(torch.__version__)")
+echo "Installed torch: $INSTALLED_TORCH_FULL"
 
 # --- Step 2: LIBERO + ManiSkill ---
 echo "[2/8] Installing LIBERO + ManiSkill..."

@@ -22,7 +22,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 try:
     import tensorflow as tf
-except ImportError:  # pragma: no cover
+except (ImportError, AttributeError):  # quick fix to the incompatibility issue between tensorflow, numpy and torch
     tf = None
 
 
