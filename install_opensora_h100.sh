@@ -94,10 +94,15 @@ LIBERO_DIR="$VENV_DIR/libero"
 if [ ! -d "$LIBERO_DIR" ]; then
     git clone ${GITHUB_PREFIX}https://github.com/RLinf/LIBERO.git "$LIBERO_DIR"
 fi
-uv pip install -e "$LIBERO_DIR"
-echo "export PYTHONPATH=$(realpath "$LIBERO_DIR"):\$PYTHONPATH" >> "$VENV_DIR/bin/activate"
+# ManiSkill first, then LIBERO editable install last (same pattern as opensora)
 uv pip install git+${GITHUB_PREFIX}https://github.com/haosulab/ManiSkill.git@v3.0.0b22
 bash "$SCRIPT_DIR/requirements/embodied/download_assets.sh" --assets maniskill
+pip install -e "$LIBERO_DIR" --no-deps
+LIBERO_REAL="$(realpath "$LIBERO_DIR")"
+echo "export PYTHONPATH=${LIBERO_REAL}:\$PYTHONPATH" >> "$VENV_DIR/bin/activate"
+source "$VENV_DIR/bin/activate"
+python -c "from libero.libero.envs import OffScreenRenderEnv; print('LIBERO import: OK')" || \
+    { echo "ERROR: LIBERO not importable after install"; exit 1; }
 
 # --- Step 3: OpenSora world model ---
 echo "[3/8] Installing OpenSora world model..."
@@ -151,20 +156,15 @@ echo "[6/8] Installing OpenVLA-OFT (without touching PyTorch)..."
 pip install git+${GITHUB_PREFIX}https://github.com/moojink/openvla-oft.git --no-deps --force-reinstall
 pip install git+${GITHUB_PREFIX}https://github.com/moojink/dlimp_openvla.git --no-deps
 
-# Manually install prismatic/dlimp runtime dependencies (excluding torch/torchvision/torchaudio)
-pip install draccus "timm>=0.9.10,<1.0.0" sentencepiece json-numpy jsonlines matplotlib \
-    "tensorflow==2.15.0" "tensorflow_datasets==4.9.3" "tensorflow_graphics" \
-    fastapi uvicorn
-
-# --- Step 7: Re-pin torch to undo any accidental changes ---
-echo "[7/8] Verifying PyTorch version..."
+# --- Step 7: One-shot pin file (numpy, LIBERO implicit deps, prismatic/dlimp/TF stack) ---
+echo "[7/8] Installing unified pin set (fixes dep hell in one command)..."
+pip install -r "$SCRIPT_DIR/requirements/embodied/opensora_openvla_oft_unified_pins.txt"
 INSTALLED_TORCH=$(python -c "import torch; print(torch.__version__.split('+')[0])")
 if [ "$INSTALLED_TORCH" != "$TORCH_VERSION" ]; then
     echo "WARNING: PyTorch was changed to $INSTALLED_TORCH, re-installing ${TORCH_VERSION}..."
     pip install torch==${TORCH_VERSION} torchvision==${TORCHVISION_VERSION} torchaudio==${TORCHAUDIO_VERSION} \
-        --index-url ${TORCH_INDEX_URL}
+        --index-url ${TORCH_INDEX_URL} --force-reinstall
 fi
-# Re-pin numpy (later installs may have upgraded it to 2.x, breaking tensorflow)
 pip install numpy==1.26.4
 
 # --- Step 8: Restart Ray so workers inherit this environment ---
@@ -189,6 +189,8 @@ from opensora.registry import MODELS
 print(f'opensora:      OK')
 import prismatic
 print(f'prismatic:     OK')
+from libero.libero.envs import OffScreenRenderEnv
+print(f'libero:        OK')
 print()
 print('All checks passed!')
 "

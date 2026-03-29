@@ -1,0 +1,31 @@
+# Unified pin set for OpenSora + LIBERO + OpenVLA-OFT on Linux.
+#
+# Why so many dependency issues (not "because Blackwell"):
+# - openvla-oft pins torch==2.2; RLinf needs torch>=2.4 → we install with --no-deps and must
+#   list the prismatic/dlimp/tensorflow stack explicitly.
+# - dlimp imports tensorflow at module import time; tensorflow 2.15 needs numpy<2 while many
+#   stacks default to numpy 2.x → pin numpy==1.26.4 (compatible with torch 2.6/2.7).
+# - LIBERO's setup.py has install_requires=[]; robosuite/bddl/etc. are "implicit" → keep them here.
+# - Long install scripts can uninstall or upgrade packages → re-run this file at the end of install.
+#
+# Torch is NOT listed here (use PyTorch cu124 or cu128 index in the shell script first).
+#
+# Repair a broken venv (after torch is already correct):
+#   pip install -r requirements/embodied/opensora_openvla_oft_unified_pins.txt
+
+numpy==1.26.4
+
+-r envs/common.txt
+
+# prismatic / dlimp (openvla-oft is installed with pip --no-deps)
+draccus
+timm>=0.9.10,<1.0.0
+sentencepiece
+json-numpy
+jsonlines
+matplotlib
+fastapi
+uvicorn
+tensorflow==2.15.0
+tensorflow_datasets==4.9.3
+tensorflow_graphics
