@@ -78,6 +78,10 @@ fi
 # --- Common embodied deps ---
 uv pip install -r "$SCRIPT_DIR/requirements/embodied/envs/common.txt"
 
+# Pin numpy < 2.0 so tensorflow 2.15 (needed by prismatic/dlimp at import time) works.
+# torch 2.7 is compatible with numpy >= 1.22, so 1.26.4 satisfies both.
+pip install numpy==1.26.4
+
 # --- Step 1: PyTorch 2.7.0 + CUDA 12.8 (Blackwell sm_120 support) ---
 # Force-reinstall to override whatever uv sync installed (likely 2.6.0+cu124).
 echo "[1/8] Installing PyTorch ${TORCH_VERSION} (cu128 for Blackwell)..."
@@ -112,8 +116,9 @@ if [ ! -d "$OPENSORA_DIR" ]; then
 fi
 
 # Install opensora's pip dependencies FIRST, BEFORE the editable install.
-# Skip torchvision (already installed with cu128) and xformers (needs cu128-compatible version).
-pip install $(grep -v '^torchvision' "$SCRIPT_DIR/requirements/embodied/models/opensora.txt" | grep -v '^xformers')
+# Skip: torchvision (already installed with cu128), xformers (needs cu128 version).
+pip install $(grep -v '^torchvision' "$SCRIPT_DIR/requirements/embodied/models/opensora.txt" \
+    | grep -v '^xformers')
 pip install xformers --index-url ${TORCH_INDEX_URL} 2>/dev/null || \
     echo "WARNING: xformers prebuilt wheel not available for cu128, skipping (OpenSora may fall back to regular attention)"
 
@@ -159,16 +164,20 @@ echo "[6/8] Installing OpenVLA-OFT (without touching PyTorch)..."
 pip install git+${GITHUB_PREFIX}https://github.com/moojink/openvla-oft.git --no-deps --force-reinstall
 pip install git+${GITHUB_PREFIX}https://github.com/moojink/dlimp_openvla.git --no-deps
 
-# Manually install prismatic's runtime dependencies (excluding torch/torchvision/torchaudio)
-pip install draccus "timm>=0.9.10,<1.0.0" sentencepiece json-numpy jsonlines matplotlib
+# Manually install prismatic/dlimp runtime dependencies (excluding torch/torchvision/torchaudio)
+pip install draccus "timm>=0.9.10,<1.0.0" sentencepiece json-numpy jsonlines matplotlib \
+    "tensorflow==2.15.0" "tensorflow_datasets==4.9.3" "tensorflow_graphics" \
+    fastapi uvicorn
 
-# --- Step 7: Re-pin torch to undo any accidental changes ---
-echo "[7/8] Verifying PyTorch version..."
+# --- Step 7: Re-pin torch and numpy to undo any accidental changes ---
+echo "[7/8] Verifying critical package versions..."
 INSTALLED_TORCH=$(python -c "import torch; print(torch.__version__.split('+')[0])")
 if [ "$INSTALLED_TORCH" != "$TORCH_VERSION" ]; then
     echo "WARNING: PyTorch was changed to $INSTALLED_TORCH, re-installing ${TORCH_VERSION}..."
     pip install torch==${TORCH_VERSION} torchvision torchaudio --index-url ${TORCH_INDEX_URL}
 fi
+# Re-pin numpy (later installs may have upgraded it to 2.x, breaking tensorflow)
+pip install numpy==1.26.4
 
 # --- Step 8: Restart Ray so workers inherit this environment ---
 echo "[8/8] Restarting Ray..."

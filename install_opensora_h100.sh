@@ -75,6 +75,10 @@ fi
 # --- Common embodied deps ---
 uv pip install -r "$SCRIPT_DIR/requirements/embodied/envs/common.txt"
 
+# Pin numpy < 2.0 so tensorflow 2.15 (needed by prismatic/dlimp at import time) works.
+# torch 2.6 is compatible with numpy >= 1.22, so 1.26.4 satisfies both.
+pip install numpy==1.26.4
+
 # --- Step 1: PyTorch (pin the correct version, override uv sync) ---
 echo "[1/8] Installing PyTorch ${TORCH_VERSION} (cu124)..."
 pip install torch==${TORCH_VERSION} torchvision==${TORCHVISION_VERSION} torchaudio==${TORCHAUDIO_VERSION} \
@@ -147,8 +151,10 @@ echo "[6/8] Installing OpenVLA-OFT (without touching PyTorch)..."
 pip install git+${GITHUB_PREFIX}https://github.com/moojink/openvla-oft.git --no-deps --force-reinstall
 pip install git+${GITHUB_PREFIX}https://github.com/moojink/dlimp_openvla.git --no-deps
 
-# Manually install prismatic's runtime dependencies (excluding torch/torchvision/torchaudio)
-pip install draccus "timm>=0.9.10,<1.0.0" sentencepiece json-numpy jsonlines matplotlib
+# Manually install prismatic/dlimp runtime dependencies (excluding torch/torchvision/torchaudio)
+pip install draccus "timm>=0.9.10,<1.0.0" sentencepiece json-numpy jsonlines matplotlib \
+    "tensorflow==2.15.0" "tensorflow_datasets==4.9.3" "tensorflow_graphics" \
+    fastapi uvicorn
 
 # --- Step 7: Re-pin torch to undo any accidental changes ---
 echo "[7/8] Verifying PyTorch version..."
@@ -158,6 +164,8 @@ if [ "$INSTALLED_TORCH" != "$TORCH_VERSION" ]; then
     pip install torch==${TORCH_VERSION} torchvision==${TORCHVISION_VERSION} torchaudio==${TORCHAUDIO_VERSION} \
         --index-url ${TORCH_INDEX_URL}
 fi
+# Re-pin numpy (later installs may have upgraded it to 2.x, breaking tensorflow)
+pip install numpy==1.26.4
 
 # --- Step 8: Restart Ray so workers inherit this environment ---
 echo "[8/8] Restarting Ray..."
