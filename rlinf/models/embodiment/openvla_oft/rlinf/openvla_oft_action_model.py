@@ -39,6 +39,8 @@ from rlinf.utils.utils import (
 
 
 class OpenVLAOFTForRLActionPrediction(OpenVLAOFTForActionPrediction, BasePolicy):
+    _supports_sdpa = True
+
     def __init__(
         self,
         config: OpenVLAOFTConfig,
