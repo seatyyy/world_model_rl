@@ -298,9 +298,11 @@ RLinf-OpenSora-LIBERO-Spatial 的目录结构如下：
   - ``rollout/advantages_max``：优势函数最大值 
   - ``rollout/advantages_mean``：优势函数均值
   - ``rollout/advantages_min``：优势函数最小值
-  - ``rollout/rewards``：一个 chunk 的奖励（参考 libero_env.py 的 L414）
+  - ``rollout/rewards``：一个 chunk 的奖励（参考 libero_env.py 的 L414） chunk_rewards 的 shape 是 [num_envs, 8]
 
 NOTE: advantage: ``A_i = (r_i - mean(r_1, ..., r_G)) / std(r_1, ..., r_G)``
+
+Rollout和Env的关系见end_to_end_workflow.md
 
 - **环境指标**：
 
