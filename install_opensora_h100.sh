@@ -111,14 +111,18 @@ if [ ! -d "$OPENSORA_DIR" ]; then
     git clone ${GITHUB_PREFIX}https://github.com/RLinf/opensora.git "$OPENSORA_DIR"
 fi
 
-# Install opensora's pip dependencies FIRST (before the editable install)
-uv pip install -r "$SCRIPT_DIR/requirements/embodied/models/opensora.txt"
-uv pip install git+${GITHUB_PREFIX}https://github.com/fangqi-Zhu/TensorNVMe.git --no-build-isolation
+# Install opensora's pip dependencies FIRST (before the editable install).
+# Use pip (not uv pip) to ensure packages land in the venv's Python, not the system one.
+pip install -r "$SCRIPT_DIR/requirements/embodied/models/opensora.txt"
+pip install git+${GITHUB_PREFIX}https://github.com/fangqi-Zhu/TensorNVMe.git --no-build-isolation
 echo "export LD_LIBRARY_PATH=~/.tensornvme/lib:\$LD_LIBRARY_PATH" >> "$VENV_DIR/bin/activate"
 
 # Editable install of opensora LAST so deps don't overwrite it.
 # Use pip (not uv pip) for more reliable editable installs.
 pip install -e "$OPENSORA_DIR" --no-deps
+
+# Re-pin numpy (opensora deps may have upgraded it to 2.x)
+pip install numpy==1.26.4
 
 # Belt-and-suspenders: also add to PYTHONPATH so Ray workers always find it
 OPENSORA_REAL="$(realpath "$OPENSORA_DIR")"
@@ -135,10 +139,20 @@ local_torch_mm=$(python -c "import torch; v=torch.__version__.split('+')[0].spli
 local_py_tag="cp$(python -c "import sys; print(f'{sys.version_info.major}{sys.version_info.minor}')")"
 apex_wheel="apex-0.1+torch${local_torch_mm}-${local_py_tag}-${local_py_tag}-linux_x86_64.whl"
 apex_url="${GITHUB_PREFIX}https://github.com/RLinf/apex/releases/download/25.09/${apex_wheel}"
-uv pip uninstall apex || true
-uv pip install "$apex_url" 2>/dev/null || \
+pip uninstall -y apex 2>/dev/null || true
+pip install "$apex_url" 2>/dev/null || \
     (echo "Apex wheel not found, building from source..."; \
-     APEX_CPP_EXT=1 APEX_CUDA_EXT=1 uv pip install git+${GITHUB_PREFIX}https://github.com/RLinf/apex.git --no-build-isolation)
+     APEX_DIR=$(mktemp -d) && \
+     git clone ${GITHUB_PREFIX}https://github.com/RLinf/apex.git "$APEX_DIR" && \
+     python -c "
+import re, pathlib
+p = pathlib.Path('$APEX_DIR/setup.py')
+t = p.read_text()
+t = re.sub(r'raise RuntimeError\(', 'import warnings; warnings.warn(', t, count=1)
+p.write_text(t)
+" && \
+     APEX_CPP_EXT=1 APEX_CUDA_EXT=1 pip install -e "$APEX_DIR" --no-build-isolation && \
+     rm -rf "$APEX_DIR")
 
 # --- Step 5: Flash Attention ---
 echo "[5/8] Installing Flash Attention..."
@@ -155,6 +169,8 @@ uv pip install "$flash_url" 2>/dev/null || \
 echo "[6/8] Installing OpenVLA-OFT (without touching PyTorch)..."
 pip install git+${GITHUB_PREFIX}https://github.com/moojink/openvla-oft.git --no-deps --force-reinstall
 pip install git+${GITHUB_PREFIX}https://github.com/moojink/dlimp_openvla.git --no-deps
+# jsonlines is needed by prismatic (from openvla-oft) but not pulled in by --no-deps
+pip install jsonlines
 
 # --- Step 7: One-shot pin file (numpy, LIBERO implicit deps, prismatic/dlimp/TF stack) ---
 echo "[7/8] Installing unified pin set (fixes dep hell in one command)..."

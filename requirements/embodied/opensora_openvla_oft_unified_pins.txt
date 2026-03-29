@@ -23,6 +23,7 @@ timm>=0.9.10,<1.0.0
 sentencepiece
 json-numpy
 jsonlines
+xformers
 matplotlib
 fastapi
 uvicorn

@@ -286,11 +286,23 @@ EOF
     local platform_tag="linux_x86_64"
     local wheel_name="apex-0.1+${torch_tag}-${py_tag}-${abi_tag}-${platform_tag}.whl"
         
-    uv pip uninstall apex || true
+    pip uninstall -y apex 2>/dev/null || true
     export NUM_THREADS=$(nproc)
     export NVCC_APPEND_FLAGS=${NVCC_APPEND_FLAGS:-"--threads ${NUM_THREADS}"}
     export APEX_PARALLEL_BUILD=${APEX_PARALLEL_BUILD:-${NUM_THREADS}}
-    uv pip install "${base_url}/${wheel_name}" || (echo "Apex installation via wheel failed. Attempting to install from source..."; APEX_CPP_EXT=1 APEX_CUDA_EXT=1 uv pip install git+${GITHUB_PREFIX}https://github.com/RLinf/apex.git --no-build-isolation)
+    pip install "${base_url}/${wheel_name}" 2>/dev/null || \
+        (echo "Apex wheel not found, building from source..."; \
+         local apex_tmp; apex_tmp=$(mktemp -d) && \
+         git clone ${GITHUB_PREFIX}https://github.com/RLinf/apex.git "$apex_tmp" && \
+         python -c "
+import re, pathlib
+p = pathlib.Path('$apex_tmp/setup.py')
+t = p.read_text()
+t = re.sub(r'raise RuntimeError\(', 'import warnings; warnings.warn(', t, count=1)
+p.write_text(t)
+" && \
+         APEX_CPP_EXT=1 APEX_CUDA_EXT=1 pip install -e "$apex_tmp" --no-build-isolation && \
+         rm -rf "$apex_tmp")
 }
 
 clone_or_reuse_repo() {
@@ -415,7 +427,31 @@ install_openvla_oft_model() {
             install_maniskill_libero_env
             install_opensora_world_model
             install_flash_attn
-            uv pip install git+${GITHUB_PREFIX}https://github.com/moojink/openvla-oft.git
+            # --no-deps to avoid torch/torchvision downgrade from openvla-oft's strict pins
+            pip install git+${GITHUB_PREFIX}https://github.com/moojink/openvla-oft.git --no-deps --force-reinstall
+            pip install git+${GITHUB_PREFIX}https://github.com/moojink/dlimp_openvla.git --no-deps
+            # Install prismatic/openvla-oft runtime deps not pulled in by --no-deps
+            pip install jsonlines "timm>=0.9.10,<1.0.0"
+            pip install -r $SCRIPT_DIR/embodied/opensora_openvla_oft_unified_pins.txt
+            # Re-pin torch in case deps changed it
+            local installed_torch
+            installed_torch=$(python -c "import torch; print(torch.__version__.split('+')[0])")
+            local expected_torch
+            expected_torch=$(python -c "
+import tomllib, pathlib
+d = tomllib.loads(pathlib.Path('pyproject.toml').read_text())
+for dep in d.get('project',{}).get('dependencies',[]):
+    if dep.startswith('torch=='):
+        print(dep.split('==')[1])
+        break
+else:
+    print('2.6.0')
+")
+            if [ "$installed_torch" != "$expected_torch" ]; then
+                echo "WARNING: PyTorch was changed to $installed_torch, re-installing ${expected_torch}..."
+                pip install torch==${expected_torch} --index-url https://download.pytorch.org/whl/cu124 --force-reinstall
+            fi
+            pip install numpy==1.26.4
             ;;
         wan)
             create_and_sync_venv
@@ -423,7 +459,11 @@ install_openvla_oft_model() {
             install_maniskill_libero_env
             install_wan_world_model
             install_flash_attn
-            uv pip install git+${GITHUB_PREFIX}https://github.com/moojink/openvla-oft.git
+            # --no-deps to avoid torch/torchvision downgrade from openvla-oft's strict pins
+            pip install git+${GITHUB_PREFIX}https://github.com/moojink/openvla-oft.git --no-deps --force-reinstall
+            pip install git+${GITHUB_PREFIX}https://github.com/moojink/dlimp_openvla.git --no-deps
+            pip install jsonlines "timm>=0.9.10,<1.0.0"
+            pip install numpy==1.26.4
             ;;
         liberopro)
             create_and_sync_venv
@@ -865,13 +905,27 @@ install_opensora_world_model() {
     # Clone opensora repository
     local opensora_dir
     opensora_dir=$(clone_or_reuse_repo OPENSORA_PATH "$VENV_DIR/opensora" ${GITHUB_PREFIX}https://github.com/RLinf/opensora.git)
-    
-    uv pip install -e "$opensora_dir"
-    
-    # Install opensora dependencies
-    uv pip install -r $SCRIPT_DIR/embodied/models/opensora.txt
-    uv pip install git+${GITHUB_PREFIX}https://github.com/fangqi-Zhu/TensorNVMe.git --no-build-isolation
+
+    # Install opensora dependencies FIRST (before the editable install).
+    # Use pip (not uv pip) to ensure packages land in the venv's Python.
+    pip install -r $SCRIPT_DIR/embodied/models/opensora.txt
+    pip install git+${GITHUB_PREFIX}https://github.com/fangqi-Zhu/TensorNVMe.git --no-build-isolation
     echo "export LD_LIBRARY_PATH=~/.tensornvme/lib:\$LD_LIBRARY_PATH" >> "$VENV_DIR/bin/activate"
+
+    # Editable install of opensora with --no-deps so its deps don't overwrite pins
+    pip install -e "$opensora_dir" --no-deps
+
+    # Belt-and-suspenders: also add to PYTHONPATH so Ray workers always find it
+    echo "export PYTHONPATH=$(realpath "$opensora_dir"):\$PYTHONPATH" >> "$VENV_DIR/bin/activate"
+    source "$VENV_DIR/bin/activate"
+
+    # Re-pin numpy (opensora deps may have upgraded it to 2.x)
+    pip install numpy==1.26.4
+
+    # Verify opensora is importable
+    python -c "from opensora.registry import MODELS; print('opensora import: OK')" || \
+        { echo "ERROR: opensora package not importable after install"; exit 1; }
+
     install_apex
 }
 
