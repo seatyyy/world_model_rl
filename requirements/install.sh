@@ -438,36 +438,8 @@ install_openvla_oft_model() {
             install_maniskill_libero_env
             install_opensora_world_model
             install_flash_attn
-<<<<<<< Updated upstream
-            # --no-deps to avoid torch/torchvision downgrade from openvla-oft's strict pins
-            pip install git+${GITHUB_PREFIX}https://github.com/moojink/openvla-oft.git --no-deps --force-reinstall
-            pip install git+${GITHUB_PREFIX}https://github.com/moojink/dlimp_openvla.git --no-deps
-            # Install prismatic/openvla-oft runtime deps not pulled in by --no-deps
-            pip install jsonlines "timm>=0.9.10,<1.0.0"
-            pip install -r $SCRIPT_DIR/embodied/opensora_openvla_oft_unified_pins.txt
-            # Re-pin torch in case deps changed it
-            local installed_torch
-            installed_torch=$(python -c "import torch; print(torch.__version__.split('+')[0])")
-            local expected_torch
-            expected_torch=$(python -c "
-import tomllib, pathlib
-d = tomllib.loads(pathlib.Path('pyproject.toml').read_text())
-for dep in d.get('project',{}).get('dependencies',[]):
-    if dep.startswith('torch=='):
-        print(dep.split('==')[1])
-        break
-else:
-    print('2.6.0')
-")
-            if [ "$installed_torch" != "$expected_torch" ]; then
-                echo "WARNING: PyTorch was changed to $installed_torch, re-installing ${expected_torch}..."
-                pip install torch==${expected_torch} --index-url https://download.pytorch.org/whl/cu124 --force-reinstall
-            fi
-            pip install numpy==1.26.4
-=======
             uv pip install git+${GITHUB_PREFIX}https://github.com/moojink/openvla-oft.git --no-deps --no-build-isolation
             install_moojink_openvla_oft_followups
->>>>>>> Stashed changes
             ;;
         wan)
             create_and_sync_venv
@@ -475,16 +447,8 @@ else:
             install_maniskill_libero_env
             install_wan_world_model
             install_flash_attn
-<<<<<<< Updated upstream
-            # --no-deps to avoid torch/torchvision downgrade from openvla-oft's strict pins
-            pip install git+${GITHUB_PREFIX}https://github.com/moojink/openvla-oft.git --no-deps --force-reinstall
-            pip install git+${GITHUB_PREFIX}https://github.com/moojink/dlimp_openvla.git --no-deps
-            pip install jsonlines "timm>=0.9.10,<1.0.0"
-            pip install numpy==1.26.4
-=======
             uv pip install git+${GITHUB_PREFIX}https://github.com/moojink/openvla-oft.git --no-deps --no-build-isolation
             install_moojink_openvla_oft_followups
->>>>>>> Stashed changes
             ;;
         liberopro)
             create_and_sync_venv
@@ -929,10 +893,19 @@ install_opensora_world_model() {
     local opensora_dir
     opensora_dir=$(clone_or_reuse_repo OPENSORA_PATH "$VENV_DIR/opensora" ${GITHUB_PREFIX}https://github.com/RLinf/opensora.git)
 
-    # Install opensora pip deps BEFORE editable install so later installs do not break the .pth link.
-    uv pip install -r $SCRIPT_DIR/embodied/models/opensora.txt
-    uv pip install git+${GITHUB_PREFIX}https://github.com/fangqi-Zhu/TensorNVMe.git --no-build-isolation
+    # Install opensora pip deps BEFORE editable install.
+    # colossalai pins torch<=2.5.1 which conflicts with xformers' torch==2.6.0,
+    # so install them separately with --no-deps since we manage torch ourselves.
+    pip install colossalai==0.5.0 --no-deps
+    pip install xformers==0.0.29.post2 --no-deps
+    pip install -r $SCRIPT_DIR/embodied/models/opensora.txt --no-deps
+    pip install git+${GITHUB_PREFIX}https://github.com/fangqi-Zhu/TensorNVMe.git --no-build-isolation
     echo "export LD_LIBRARY_PATH=~/.tensornvme/lib:\$LD_LIBRARY_PATH" >> "$VENV_DIR/bin/activate"
+    # Install transitive deps that --no-deps skipped
+    pip install fabric rpyc google beautifulsoup4 fastapi uvicorn paramiko plumbum pynacl bcrypt \
+        mmengine addict yapf braceexpand webdataset decord contexttimer rotary_embedding_torch \
+        termcolor lpips diffusers==0.29.0 bitsandbytes galore-torch av annotated-doc soupsieve \
+        sentencepiece starlette
 
     # Editable install of opensora with --no-deps so its deps don't overwrite pins
     pip install -e "$opensora_dir" --no-deps
@@ -949,11 +922,6 @@ install_opensora_world_model() {
         { echo "ERROR: opensora package not importable after install"; exit 1; }
 
     install_apex
-
-    uv pip install -e "$opensora_dir"
-    local opensora_real
-    opensora_real=$(realpath "$opensora_dir")
-    echo "export PYTHONPATH=${opensora_real}:\$PYTHONPATH" >> "$VENV_DIR/bin/activate"
 }
 
 install_wan_world_model() {

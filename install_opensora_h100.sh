@@ -119,8 +119,17 @@ fi
 
 # Install opensora's pip dependencies FIRST (before the editable install).
 # Use pip (not uv pip) to ensure packages land in the venv's Python, not the system one.
-pip install -r "$SCRIPT_DIR/requirements/embodied/models/opensora.txt"
+# colossalai pins torch<=2.5.1 which conflicts with xformers' torch==2.6.0,
+# so install them separately with --no-deps since we manage torch ourselves.
+pip install colossalai==0.5.0 --no-deps
+pip install xformers==0.0.29.post2 --no-deps
+pip install -r "$SCRIPT_DIR/requirements/embodied/models/opensora.txt" --no-deps
 pip install git+${GITHUB_PREFIX}https://github.com/fangqi-Zhu/TensorNVMe.git --no-build-isolation
+# Install transitive deps that --no-deps skipped (fabric, rpyc, etc.)
+pip install fabric rpyc google beautifulsoup4 fastapi uvicorn paramiko plumbum pynacl bcrypt \
+    mmengine addict yapf braceexpand webdataset decord contexttimer rotary_embedding_torch \
+    termcolor lpips diffusers==0.29.0 bitsandbytes galore-torch av annotated-doc soupsieve \
+    sentencepiece starlette
 echo "export LD_LIBRARY_PATH=~/.tensornvme/lib:\$LD_LIBRARY_PATH" >> "$VENV_DIR/bin/activate"
 
 # Editable install of opensora LAST so deps don't overwrite it.

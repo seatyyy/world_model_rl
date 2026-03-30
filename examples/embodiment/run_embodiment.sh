@@ -34,6 +34,9 @@ ROBOT_PLATFORM=${2:-${ROBOT_PLATFORM:-"LIBERO"}}
 
 export ROBOT_PLATFORM
 
+# Collect all positional args after $1 and $2 as Hydra overrides
+HYDRA_OVERRIDES="${@:3}"
+
 # Libero variant: standard, pro, plus
 export LIBERO_TYPE=${LIBERO_TYPE:-"standard"}
 if [ "$LIBERO_TYPE" == "pro" ]; then
@@ -52,6 +55,6 @@ echo "Using Python at $(which python)"
 LOG_DIR="${REPO_PATH}/logs/$(date +'%Y%m%d-%H:%M:%S')-${CONFIG_NAME}" #/$(date +'%Y%m%d-%H:%M:%S')"
 MEGA_LOG_FILE="${LOG_DIR}/run_embodiment.log"
 mkdir -p "${LOG_DIR}"
-CMD="python ${SRC_FILE} --config-path ${EMBODIED_PATH}/config/ --config-name ${CONFIG_NAME} runner.logger.log_path=${LOG_DIR}"
+CMD="python ${SRC_FILE} --config-path ${EMBODIED_PATH}/config/ --config-name ${CONFIG_NAME} runner.logger.log_path=${LOG_DIR} ${HYDRA_OVERRIDES}"
 echo ${CMD} > ${MEGA_LOG_FILE}
 ${CMD} 2>&1 | tee -a ${MEGA_LOG_FILE}
