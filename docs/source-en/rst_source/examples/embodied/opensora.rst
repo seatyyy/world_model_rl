@@ -107,6 +107,22 @@ Use Docker image for the experiment.
       # For mainland China users, you can use the following for better download speed:
       # docker.1ms.run/rlinf/rlinf:agentic-rlinf0.2-opensora
 
+.. note::
+
+   **Which path to choose**
+
+   The published image is built from ``docker/Dockerfile`` with
+   ``nvidia/cuda:12.4.1-cudnn-devel-ubuntu22.04`` and
+   ``bash requirements/install.sh embodied ... --env opensora`` (PyTorch is typically a **CUDA 12.4**
+   wheel). That stack is a good default for **Ampere / Ada / Hopper** (e.g. A100, L40, H100).
+
+   **NVIDIA Blackwell (compute capability sm_120)** needs a **PyTorch build with CUDA 12.8** (and
+   matching wheels). The stock image above is **unlikely** to run kernels on Blackwell GPUs (you may
+   see errors such as *no kernel image is available for execution on the device*). For Blackwell,
+   either build a **custom image** on a CUDA 12.8+ base and install ``torch`` from the cu128 index,
+   or use the repository helper script ``install_opensora_blackwell.sh`` on the host (or adapt it
+   into your Dockerfile).
+
 **Option 2: Custom Environment**
 
 Install dependencies directly in your environment by running the following command:

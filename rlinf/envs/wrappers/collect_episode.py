@@ -230,6 +230,17 @@ class CollectEpisode(gym.Wrapper):
             )
             self._maybe_flush(step_term, step_trunc)
 
+        # When the env returns fewer observations than the truncation tensor's
+        # width (e.g. world-model envs return 1 obs per chunk but truncation
+        # shape is [num_envs, chunk_size]), the loop above only checks index 0.
+        # Ensure we also check the *last* column where signals are typically placed.
+        if (
+            chunk_size > 0
+            and getattr(terminations, "ndim", 1) > 1
+            and terminations.shape[1] > chunk_size
+        ):
+            self._maybe_flush(terminations[:, -1], truncations[:, -1])
+
         return obs_list, rewards, terminations, truncations, infos_list
 
     def close(self):

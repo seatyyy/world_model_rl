@@ -475,21 +475,34 @@ class EnvWorker(Worker):
         adjusted_rewards[:, -1] += self.cfg.algorithm.gamma * final_values
         return adjusted_rewards
 
+    @staticmethod
+    def _find_wrapper(env, wrapper_cls):
+        """Walk the wrapper chain and return the first instance of *wrapper_cls*, or None."""
+        current = env
+        while current is not None:
+            if isinstance(current, wrapper_cls):
+                return current
+            current = getattr(current, "env", None)
+        return None
+
     def finish_rollout(self, mode="train"):
         # reset
         if mode == "train":
             for i in range(self.stage_num):
-                if self.cfg.env.train.video_cfg.save_video and isinstance(
-                    self.env_list[i], RecordVideo
-                ):
-                    self.env_list[i].flush_video()
+                print(f"[DEBUG] env_list[{i}] type: {type(self.env_list[i])}", flush=True)
+                print(f"[DEBUG] env chain: {type(self.env_list[i]).__name__} -> {type(getattr(self.env_list[i], 'env', None)).__name__} -> {type(getattr(getattr(self.env_list[i], 'env', None), 'env', None)).__name__}", flush=True)
+
+                if self.cfg.env.train.video_cfg.save_video:
+                    recorder = self._find_wrapper(self.env_list[i], RecordVideo)
+                    if recorder is not None:
+                        recorder.flush_video()
                 self.env_list[i].update_reset_state_ids()
         elif mode == "eval":
             for i in range(self.stage_num):
-                if self.cfg.env.eval.video_cfg.save_video and isinstance(
-                    self.eval_env_list[i], RecordVideo
-                ):
-                    self.eval_env_list[i].flush_video()
+                if self.cfg.env.eval.video_cfg.save_video:
+                    recorder = self._find_wrapper(self.eval_env_list[i], RecordVideo)
+                    if recorder is not None:
+                        recorder.flush_video()
                 if not self.cfg.env.eval.auto_reset:
                     self.eval_env_list[i].update_reset_state_ids()
 

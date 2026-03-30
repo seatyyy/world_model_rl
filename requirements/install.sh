@@ -349,6 +349,13 @@ clone_or_reuse_repo() {
 }
 
 #=======================EMBODIED INSTALLERS=======================
+# OpenVLA-OFT (moojink) pins torch==2.2; RLinf needs torch>=2.4. Install with --no-deps, then
+# dlimp (git) + unified pins: numpy<2 for TF 2.15, LIBERO implicit deps, prismatic imports.
+install_moojink_openvla_oft_followups() {
+    uv pip install git+${GITHUB_PREFIX}https://github.com/moojink/dlimp_openvla.git --no-deps
+    uv pip install -r "$SCRIPT_DIR/embodied/opensora_openvla_oft_unified_pins.txt"
+}
+
 install_common_embodied_deps() {
     uv sync --extra embodied --active $NO_INSTALL_RLINF_CMD
     uv pip install -r $SCRIPT_DIR/embodied/envs/common.txt
@@ -390,7 +397,8 @@ install_openvla_oft_model() {
             PYTHON_VERSION="3.10"
             create_and_sync_venv
             install_common_embodied_deps
-            uv pip install git+${GITHUB_PREFIX}https://github.com/moojink/openvla-oft.git  --no-build-isolation
+            uv pip install git+${GITHUB_PREFIX}https://github.com/moojink/openvla-oft.git --no-deps --no-build-isolation
+            install_moojink_openvla_oft_followups
             install_behavior_env
             ;;
         maniskill_libero)
@@ -398,21 +406,24 @@ install_openvla_oft_model() {
             install_common_embodied_deps
             install_maniskill_libero_env
             install_flash_attn
-            uv pip install git+${GITHUB_PREFIX}https://github.com/moojink/openvla-oft.git  --no-build-isolation
+            uv pip install git+${GITHUB_PREFIX}https://github.com/moojink/openvla-oft.git --no-deps --no-build-isolation
+            install_moojink_openvla_oft_followups
             ;;
         metaworld)
             create_and_sync_venv
             install_common_embodied_deps
             install_flash_attn
             install_metaworld_env
-            uv pip install git+${GITHUB_PREFIX}https://github.com/moojink/openvla-oft.git  --no-build-isolation
+            uv pip install git+${GITHUB_PREFIX}https://github.com/moojink/openvla-oft.git --no-deps --no-build-isolation
+            install_moojink_openvla_oft_followups
             ;;
         calvin)
             create_and_sync_venv
             install_common_embodied_deps
             install_flash_attn
             install_calvin_env
-            uv pip install git+${GITHUB_PREFIX}https://github.com/moojink/openvla-oft.git  --no-build-isolation
+            uv pip install git+${GITHUB_PREFIX}https://github.com/moojink/openvla-oft.git --no-deps --no-build-isolation
+            install_moojink_openvla_oft_followups
             ;;
         robotwin)
             create_and_sync_venv
@@ -427,6 +438,7 @@ install_openvla_oft_model() {
             install_maniskill_libero_env
             install_opensora_world_model
             install_flash_attn
+<<<<<<< Updated upstream
             # --no-deps to avoid torch/torchvision downgrade from openvla-oft's strict pins
             pip install git+${GITHUB_PREFIX}https://github.com/moojink/openvla-oft.git --no-deps --force-reinstall
             pip install git+${GITHUB_PREFIX}https://github.com/moojink/dlimp_openvla.git --no-deps
@@ -452,6 +464,10 @@ else:
                 pip install torch==${expected_torch} --index-url https://download.pytorch.org/whl/cu124 --force-reinstall
             fi
             pip install numpy==1.26.4
+=======
+            uv pip install git+${GITHUB_PREFIX}https://github.com/moojink/openvla-oft.git --no-deps --no-build-isolation
+            install_moojink_openvla_oft_followups
+>>>>>>> Stashed changes
             ;;
         wan)
             create_and_sync_venv
@@ -459,25 +475,32 @@ else:
             install_maniskill_libero_env
             install_wan_world_model
             install_flash_attn
+<<<<<<< Updated upstream
             # --no-deps to avoid torch/torchvision downgrade from openvla-oft's strict pins
             pip install git+${GITHUB_PREFIX}https://github.com/moojink/openvla-oft.git --no-deps --force-reinstall
             pip install git+${GITHUB_PREFIX}https://github.com/moojink/dlimp_openvla.git --no-deps
             pip install jsonlines "timm>=0.9.10,<1.0.0"
             pip install numpy==1.26.4
+=======
+            uv pip install git+${GITHUB_PREFIX}https://github.com/moojink/openvla-oft.git --no-deps --no-build-isolation
+            install_moojink_openvla_oft_followups
+>>>>>>> Stashed changes
             ;;
         liberopro)
             create_and_sync_venv
             install_common_embodied_deps
             install_liberopro_env
             install_flash_attn
-            uv pip install git+${GITHUB_PREFIX}https://github.com/moojink/openvla-oft.git  --no-build-isolation
+            uv pip install git+${GITHUB_PREFIX}https://github.com/moojink/openvla-oft.git --no-deps --no-build-isolation
+            install_moojink_openvla_oft_followups
             ;;
         liberoplus)
             create_and_sync_venv
             install_common_embodied_deps
             install_liberoplus_env
             install_flash_attn
-            uv pip install git+${GITHUB_PREFIX}https://github.com/moojink/openvla-oft.git  --no-build-isolation
+            uv pip install git+${GITHUB_PREFIX}https://github.com/moojink/openvla-oft.git --no-deps --no-build-isolation
+            install_moojink_openvla_oft_followups
             ;;
         *)
             echo "Environment '$ENV_NAME' is not supported for OpenVLA-OFT model." >&2
@@ -906,10 +929,9 @@ install_opensora_world_model() {
     local opensora_dir
     opensora_dir=$(clone_or_reuse_repo OPENSORA_PATH "$VENV_DIR/opensora" ${GITHUB_PREFIX}https://github.com/RLinf/opensora.git)
 
-    # Install opensora dependencies FIRST (before the editable install).
-    # Use pip (not uv pip) to ensure packages land in the venv's Python.
-    pip install -r $SCRIPT_DIR/embodied/models/opensora.txt
-    pip install git+${GITHUB_PREFIX}https://github.com/fangqi-Zhu/TensorNVMe.git --no-build-isolation
+    # Install opensora pip deps BEFORE editable install so later installs do not break the .pth link.
+    uv pip install -r $SCRIPT_DIR/embodied/models/opensora.txt
+    uv pip install git+${GITHUB_PREFIX}https://github.com/fangqi-Zhu/TensorNVMe.git --no-build-isolation
     echo "export LD_LIBRARY_PATH=~/.tensornvme/lib:\$LD_LIBRARY_PATH" >> "$VENV_DIR/bin/activate"
 
     # Editable install of opensora with --no-deps so its deps don't overwrite pins
@@ -927,6 +949,11 @@ install_opensora_world_model() {
         { echo "ERROR: opensora package not importable after install"; exit 1; }
 
     install_apex
+
+    uv pip install -e "$opensora_dir"
+    local opensora_real
+    opensora_real=$(realpath "$opensora_dir")
+    echo "export PYTHONPATH=${opensora_real}:\$PYTHONPATH" >> "$VENV_DIR/bin/activate"
 }
 
 install_wan_world_model() {

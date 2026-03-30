@@ -105,6 +105,22 @@ OpenSora 主要希望赋予模型以下能力：
       # 如果需要国内加速下载镜像，可以使用：
       # docker.1ms.run/rlinf/rlinf:agentic-rlinf0.2-opensora
 
+.. note::
+
+   **如何选择安装方式**
+
+   官方镜像由仓库 ``docker/Dockerfile`` 构建：基础镜像为
+   ``nvidia/cuda:12.4.1-cudnn-devel-ubuntu22.04``，并通过
+   ``bash requirements/install.sh embodied ... --env opensora`` 安装依赖（PyTorch 一般为 **CUDA 12.4**
+   的预编译包）。该组合适合 **Ampere / Ada / Hopper**（如 A100、L40、H100）等 GPU，**优先用 Docker**
+   通常比手搓宿主机环境更省事。
+
+   **NVIDIA Blackwell（算力 sm_120）** 需要带 **CUDA 12.8** 的 PyTorch（例如 cu128 索引下的
+   ``torch``）及匹配的依赖。上述官方镜像 **通常无法在 Blackwell 上正常跑 GPU 算子**（可能出现
+   *no kernel image is available for execution on the device* 等错误）。若在 Blackwell 上实验，请
+   **自建镜像**（以 CUDA 12.8+ 为基础镜像并安装 cu128 的 PyTorch），或在宿主机使用仓库中的
+   ``install_opensora_blackwell.sh``（或将其步骤并入你的 Dockerfile）。
+
 **选项 2：自定义环境**
 
 直接在本地环境中安装依赖：

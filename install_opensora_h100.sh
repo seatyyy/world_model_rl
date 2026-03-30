@@ -88,6 +88,11 @@ pip install torch==${TORCH_VERSION} torchvision==${TORCHVISION_VERSION} torchaud
 INSTALLED_TORCH_FULL=$(python -c "import torch; print(torch.__version__)")
 echo "Installed torch: $INSTALLED_TORCH_FULL"
 
+# torch --force-reinstall often removes unrelated packages the resolver thinks conflict; restore LIBERO deps.
+echo "Re-installing embodied common deps after torch..."
+pip install -r "$SCRIPT_DIR/requirements/embodied/envs/common.txt"
+pip install numpy==1.26.4
+
 # --- Step 2: LIBERO + ManiSkill ---
 echo "[2/8] Installing LIBERO + ManiSkill..."
 LIBERO_DIR="$VENV_DIR/libero"
@@ -101,6 +106,7 @@ pip install -e "$LIBERO_DIR" --no-deps
 LIBERO_REAL="$(realpath "$LIBERO_DIR")"
 echo "export PYTHONPATH=${LIBERO_REAL}:\$PYTHONPATH" >> "$VENV_DIR/bin/activate"
 source "$VENV_DIR/bin/activate"
+pip install -r "$SCRIPT_DIR/requirements/embodied/envs/common.txt"
 python -c "from libero.libero.envs import OffScreenRenderEnv; print('LIBERO import: OK')" || \
     { echo "ERROR: LIBERO not importable after install"; exit 1; }
 
@@ -182,6 +188,15 @@ if [ "$INSTALLED_TORCH" != "$TORCH_VERSION" ]; then
         --index-url ${TORCH_INDEX_URL} --force-reinstall
 fi
 pip install numpy==1.26.4
+
+# Later pip steps often break the opensora editable install; restore it before Ray.
+echo "Re-asserting OpenSora editable install..."
+pip install -e "$OPENSORA_DIR" --no-deps
+OPENSORA_REAL="$(realpath "$OPENSORA_DIR")"
+echo "export PYTHONPATH=${OPENSORA_REAL}:\$PYTHONPATH" >> "$VENV_DIR/bin/activate"
+source "$VENV_DIR/bin/activate"
+python -c "from opensora.registry import MODELS; print('opensora re-check: OK')" || \
+    { echo "ERROR: opensora not importable after unified pins"; exit 1; }
 
 # --- Step 8: Restart Ray so workers inherit this environment ---
 echo "[8/8] Restarting Ray..."
